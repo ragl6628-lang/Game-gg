@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>لعبة لين — الفناء (النهائية)</title>
+<style>
+:root{--accent:#6b4ad8}
+html,body{height:100%;margin:0;font-family:Tahoma,Arial,sans-serif;background:linear-gradient(180deg,#eaf1ff,#fbf8ff)}
+body{display:flex;align-items:center;justify-content:center;padding:16px}
+#game{width:100%;max-width:900px;border-radius:12px;box-shadow:0 18px 40px rgba(60,34,100,0.12);background:linear-gradient(180deg,#ffffffcc,#fff);overflow:hidden;position:relative}
+.header{display:flex;gap:16px;padding:12px;align-items:center;background:linear-gradient(180deg,#d7ecff,#cfe8ff)}
+.avatar-box{width:150px;height:150px;border-radius:12px;overflow:hidden;flex-shrink:0;background:#fff;display:flex;align-items:center;justify-content:center}
+.avatar-box img{width:100%;height:100%;object-fit:cover;display:block;transition:filter .35s,transform .35s}
+.meta{flex:1}
+h1{margin:0;font-size:20px;color:#2f2548}
+.subtitle{margin:6px 0 0;color:#5d4e7a;font-size:13px}
+.center{padding:18px}
+#story{min-height:88px;padding:12px;background:linear-gradient(180deg,#fff,#fff0);border-radius:10px;color:#32284b;font-size:16px}
+#choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+button.choice{padding:12px;border-radius:10px;border:0;background:var(--accent);color:#fff;font-size:15px;cursor:pointer;transition:transform .12s,background .12s}
+button.choice:active{transform:translateY(2px)}
+.controls{display:flex;gap:8px;justify-content:center;padding:12px;flex-wrap:wrap}
+.small{background:#f3eefc;border:0;padding:8px 12px;border-radius:10px;cursor:pointer;color:#35285a}
+.status{display:flex;gap:10px;margin-top:10px;align-items:center}
+.stat{flex:1;background:#f0ebff;padding:8px;border-radius:10px}
+.stat .label{font-size:12px;color:#4a3b66;margin-bottom:6px}
+.stat .bar{height:12px;background:#eee;border-radius:8px;overflow:hidden}
+.stat .bar > div{height:100%;width:0%;background:linear-gradient(90deg,#ff8a8a,#ffb3b3);transition:width .35s}
+.stat .bar.conf > div{background:linear-gradient(90deg,#6b4ad8,#a97de0)}
+#end{padding:14px;text-align:center;color:#2f2548;white-space:pre-line}
+footer{font-size:12px;color:#6d5f81;text-align:center;padding:12px 18px}
+#particles{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;overflow:hidden}
+.particle{position:absolute;width:18px;height:18px;opacity:0;transform:translate(-50%,-50%)}
+.star{background:radial-gradient(circle,#fff,#ffd700 40%,transparent 60%);border-radius:50%;box-shadow:0 0 6px rgba(255,215,0,0.8)}
+.flower{background:radial-gradient(circle,#fff,#ff9fcf 40%,transparent 60%);border-radius:50%;box-shadow:0 0 6px rgba(255,160,180,0.9)}
+#moodOverlay{position:absolute;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0);transition:background .5s;pointer-events:none}
+@media(max-width:600px){#choices{grid-template-columns:1fr} .header{flex-direction:column;align-items:center} .avatar-box{width:120px;height:120px}}
+</style>
+</head>
+<body>
+<div id="game" role="application" aria-live="polite">
+  <div id="particles"></div>
+  <div id="moodOverlay"></div>
+
+  <div class="header">
+    <div class="avatar-box" id="avatarBox">
+      <!-- ضعّي هنا الصور الثلاث في نفس المجلد باسم normal.jpg, sad.jpg, happy.jpg -->
+      <img id="avatarImg" src="normal.jpg" alt="لين - عادية">
+    </div>
+    <div class="meta">
+      <h1>لين — في فناء المدرسة</h1>
+      <div class="subtitle">قصة تفاعلية قصيرة — اختياراتك توضّح المسار</div>
+      <div class="status" aria-hidden="false">
+        <div class="stat">
+          <div class="label">السعادة</div>
+          <div class="bar conf"><div id="happyBar" style="width:50%"></div></div>
+        </div>
+        <div class="stat">
+          <div class="label">الحزن</div>
+          <div class="bar"><div id="sadBar" style="width:30%"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="center">
+    <!-- النص الأول لازم يكون بالضبط اللي طلبتيه -->
+    <div id="story">في فناء المدرسة، سمعت لين ضحكات ومهمهمات. حسّت إنهم يسخرون من زيّها. كيف تردّين؟</div>
+    <div id="choices" aria-label="خيارات اللعبة"></div>
+    <div id="end"></div>
+  </div>
+
+  <div class="controls">
+    <button id="sfxToggle" class="small">🔈 تشغيل الأصوات</button>
+    <button id="tips" class="small">💡 نصايح</button>
+    <button id="restart" class="small" style="display:none">🔁 إعادة</button>
+  </div>
+
+  <footer>ملاحظة: اللعبة تعليمية — إذا واجهتِ تنمر حقيقي، كلّمي شخص تثقين فيه.</footer>
+</div>
+
+<script>
+// أسماء الصور: normal.jpg   sad.jpg   happy.jpg
+const IMG_NORMAL = "normal.jpg";
+const IMG_SAD = "sad.jpg";
+const IMG_HAPPY = "happy.jpg";
+
+/* أصوات وموسيقى خلفية (WebAudio) */
+let audioCtx = null;
+let sfxOn = true;
+function ensureAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+
+/* خلفية ناعمة جداً */
+let bg = null;
+function startBackground(){
+  try{
+    ensureAudio();
+    if(bg) return;
+    const o1 = audioCtx.createOscillator(), o2 = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o1.type='sine'; o1.frequency.value = 110;
+    o2.type='sine'; o2.frequency.value = 220;
+    g.gain.value = 0.002; // very low
+    o1.connect(g); o2.connect(g); g.connect(audioCtx.destination);
+    o1.start(); o2.start();
+    bg = {{o1:o1,o2:o2,g:g}};
+  }catch(e){}
+}
+function stopBackground(){
+  try{ if(bg){ bg.o1.stop(); bg.o2.stop(); bg = null; } }catch(e){}
+}
+
+/* مؤثرات قصيرة */
+function sfxClick(){ if(!sfxOn) return; ensureAudio(); const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type='sine'; o.frequency.value=880; g.gain.value=0.04; o.connect(g); g.connect(audioCtx.destination); const now = audioCtx.currentTime; o.start(now); g.gain.exponentialRampToValueAtTime(0.0001, now+0.18); o.stop(now+0.18); }
+function sfxSuccess(){ if(!sfxOn) return; ensureAudio(); const o1 = audioCtx.createOscillator(), o2 = audioCtx.createOscillator(), g = audioCtx.createGain(); o1.type='triangle'; o1.frequency.value=880; o2.type='sine'; o2.frequency.value=1320; g.gain.value=0.045; o1.connect(g); o2.connect(g); g.connect(audioCtx.destination); const now = audioCtx.currentTime; o1.start(now); o2.start(now+0.03); g.gain.exponentialRampToValueAtTime(0.0001, now+0.6); o1.stop(now+0.6); o2.stop(now+0.63); }
+function sfxSad(){ if(!sfxOn) return; ensureAudio(); const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type='sawtooth'; o.frequency.value=220; g.gain.value=0.06; o.connect(g); g.connect(audioCtx.destination); const now = audioCtx.currentTime; o.start(now); g.gain.exponentialRampToValueAtTime(0.0001, now+0.45); o.stop(now+0.45); }
+function sfxWhisper(){ if(!sfxOn) return; ensureAudio(); const bufferSize = audioCtx.sampleRate * 0.6; const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate); const data = buffer.getChannelData(0); for(let i=0;i<bufferSize;i++) data[i] = (Math.random()*2-1)*0.06; const src = audioCtx.createBufferSource(); src.buffer = buffer; const filt = audioCtx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value = 1200; const g = audioCtx.createGain(); g.gain.value = 0.06; src.connect(filt); filt.connect(g); g.connect(audioCtx.destination); src.start(); src.stop(audioCtx.currentTime + 0.6); }
+
+/* راوية بسيطة — صوت بنت ناعم عبر SpeechSynthesis */
+function narrate(text){
+  if(!sfxOn) return;
+  if('speechSynthesis' in window){
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ar-SA'; u.rate = 1; u.pitch = 1.05; u.volume = 1.0;
+    const voices = window.speechSynthesis.getVoices();
+    if(voices && voices.length){
+      // اختار أول صوت عربي متوفر أو أي صوت متاح
+      let found = voices.find(v=>v.lang && v.lang.startsWith('ar')) || voices[0];
+      if(found) u.voice = found;
+    }
+    try{ if(audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }catch(e){}
+    window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+  }
+}
+
+/* particles (ورود + نجوم) */
+const particlesEl = document.getElementById('particles');
+function spawnParticle(kind){
+  const el = document.createElement('div');
+  el.className = 'particle ' + (kind==='flower'?'flower':'star');
+  const x = Math.random()*100;
+  const y = Math.random()*40 + 20;
+  el.style.left = x + '%';
+  el.style.top = y + '%';
+  particlesEl.appendChild(el);
+  el.style.opacity = 1;
+  el.style.transform = 'translate(-50%,-50%) scale(0.6)';
+  setTimeout(()=>{ el.style.transition = 'all 1200ms ease-out'; el.style.transform = 'translate(-50%,-200%) scale(1)'; el.style.opacity = 0; },10);
+  setTimeout(()=>{ try{ particlesEl.removeChild(el); }catch(e){} },1400);
+}
+function burstHappy(){ for(let i=0;i<10;i++) setTimeout(()=>spawnParticle(Math.random()>0.5?'flower':'star'), i*80); }
+function moodSadOverlay(){ const mo = document.getElementById('moodOverlay'); mo.style.background = 'rgba(0,0,0,0.28)'; setTimeout(()=>{ mo.style.background = 'rgba(0,0,0,0)'; },900); }
+
+/* الحالة والـ UI */
+let happy = 50, sad = 30;
+const avatarImg = document.getElementById('avatarImg');
+const happyBar = document.getElementById('happyBar');
+const sadBar = document.getElementById('sadBar');
+const storyEl = document.getElementById('story');
+const choicesEl = document.getElementById('choices');
+const endEl = document.getElementById('end');
+const sfxToggle = document.getElementById('sfxToggle');
+const restartBtn = document.getElementById('restart');
+const tipsBtn = document.getElementById('tips');
+
+function updateBarsAndAvatar(){
+  happyBar.style.width = happy + '%';
+  sadBar.style.width = sad + '%';
+  if(happy - sad > 15){ avatarImg.src = IMG_HAPPY; avatarImg.style.filter = 'none'; }
+  else if(sad - happy > 10){ avatarImg.src = IMG_SAD; avatarImg.style.filter = 'grayscale(60%)'; }
+  else { avatarImg.src = IMG_NORMAL; avatarImg.style.filter = 'brightness(0.98)'; }
+}
+
+/* النص الابتدائي لازم يكون حرفي زي ما طلبتي */
+const START_TEXT = "في فناء المدرسة، سمعت لين ضحكات ومهمهمات. حسّت إنهم يسخرون من زيّها. كيف تردّين؟";
+
+function setChoices(list){
+  choicesEl.innerHTML = ''; endEl.textContent = ''; restartBtn.style.display = 'none';
+  list.forEach(it=>{
+    const b = document.createElement('button');
+    b.className = 'choice'; b.textContent = it.text;
+    b.onclick = ()=>{ sfxClick(); it.run(); };
+    choicesEl.appendChild(b);
+  });
+  updateBarsAndAvatar();
+}
+
+/* بداية المشهد — الراوية تقرأ النص الأول (بالضبط) */
+function startScene(){
+  storyEl.textContent = START_TEXT;
+  // قول النص بصوت الراوية (عشان يسمعون بداية القصة)
+  narrate(START_TEXT);
+  // شغّل الميوزك الخلفية الناعمة
+  try{ startBackground(); }catch(e){}
+  setChoices([
+    {text:'أتجاهلهم وأمشي بعيد', run: ignorePath},
+    {text:'أواجههم بهدوء وأقول يوقفون', run: confront},
+    {text:'أبلغ المعلمة فوراً', run: tellTeacher},
+    {text:'أرد بنفس الأسلوب', run: retaliate}
+  ]);
+}
+
+/* المسارات — بعد كل اختيار، الراوية تشرح وش صار بالضبط */
+function ignorePath(){
+  sad = Math.min(100, sad + 10); happy = Math.max(0, happy - 6); updateBarsAndAvatar();
+  sfxWhisper(); moodSadOverlay(); sfxSad();
+  const after = "ضحكوا أكثر لما سكتت لين، وكأن صمتها شجّعهم.";
+  narrate(after);
+  storyEl.textContent = after;
+  setChoices([
+    {text:'أفتح لصديقتي وأحكي', run: ()=>{
+       happy = Math.min(100, happy + 15); sad = Math.max(0, sad - 10); updateBarsAndAvatar();
+       burstHappy(); sfxSuccess();
+       const a = "انضمت لها صديقتها ووقفت معها، وبدأت السلطات بالاعتذار.";
+       narrate(a); storyEl.textContent = a;
+       setTimeout(()=>finalSummary(),700);
+    }},
+    {text:'أكتم وأمشي', run: ()=>{
+       sad = Math.min(100, sad + 12); happy = Math.max(0, happy - 8); updateBarsAndAvatar();
+       sfxSad(); moodSadOverlay();
+       const a = "ركضت لين وهي تحاول تخفي دمعتها، لكن قلبها تألم.";
+       narrate(a); storyEl.textContent = a;
+       setTimeout(()=>finalSummary(),700);
+    }}
+  ]);
+}
+
+function confront(){
+  happy = Math.min(100, happy + 8); sad = Math.max(0, sad - 6); updateBarsAndAvatar();
+  sfxWhisper(); sfxClick();
+  const after = "تفاجأوا من كلامها، وسكتوا لحظة… بعضهم لم يتوقع أن تسمعهم ردّها.";
+  narrate(after); storyEl.textContent = after;
+  setChoices([
+    {text:'أطلب اعتذار وحدود', run: ()=>{
+      happy = Math.min(100, happy + 12); sad = Math.max(0, sad - 8); updateBarsAndAvatar();
+      burstHappy(); sfxSuccess();
+      const a = "اعترفوا بخطئهم واعتذروا، وصارت مسافة الاحترام أوضح.";
+      narrate(a); storyEl.textContent = a;
+      setTimeout(()=>finalSummary(),700);
+    }},
+    {text:'أمشي بثقة بعد التعبير', run: ()=>{
+      happy = Math.min(100, happy + 8); sad = Math.max(0, sad - 5); updateBarsAndAvatar();
+      burstHappy(); sfxClick();
+      const a = "غادرت لين بثقة، وكأن كلامها رسخ في أذهان البعض.";
+      narrate(a); storyEl.textContent = a;
+      setTimeout(()=>finalSummary(),700);
+    }}
+  ]);
+}
+
+function tellTeacher(){
+  sfxWhisper();
+  const after = "المعلمة تدخلت بحزم وطلبت شرح الموقف؛ بعضهن اعتذرن جزئياً.";
+  narrate(after); storyEl.textContent = after;
+  setChoices([
+    {text:'أقبل الاعتذار وأمشي', run: ()=>{
+      happy = Math.min(100, happy + 10); sad = Math.max(0, sad - 10); updateBarsAndAvatar();
+      burstHappy(); sfxSuccess();
+      const a = "قبلت لين الاعتذار ورجعت تمشي بثقة مع وعي أكبر.";
+      narrate(a); storyEl.textContent = a;
+      setTimeout(()=>finalSummary(),700);
+    }},
+    {text:'أطلب متابعة من المرشدة', run: ()=>{
+      happy = Math.min(100, happy + 14); sad = Math.max(0, sad - 12); updateBarsAndAvatar();
+      burstHappy(); sfxSuccess();
+      const a = "تابعت مع المرشدة، وصارت خطوات توعية بالمدرسة.";
+      narrate(a); storyEl.textContent = a;
+      setTimeout(()=>finalSummary(),700);
+    }}
+  ]);
+}
+
+function retaliate(){
+  sfxWhisper(); sfxSad();
+  const after = "لين ردت بنفس الأسلوب، والموقف تصاعد؛ بعض الطلاب انقسموا بين مؤيد ومعارض.";
+  narrate(after); storyEl.textContent = after;
+  setChoices([
+    {text:'أعتذر وأحاول أصلح', run: ()=>{
+      sad = Math.min(100, sad + 8); happy = Math.max(0, happy - 6); updateBarsAndAvatar();
+      sfxSad(); moodSadOverlay();
+      const a = "لحقها ندم، وبدأت تصلح الموقف بالتواضع.";
+      narrate(a); storyEl.textContent = a;
+      setTimeout(()=>finalSummary(),700);
+    }},
+    {text:'أثبت موقفي لأن لازم يتعلمون', run: ()=>{
+      happy = Math.min(100, happy + 6); sad = Math.min(100, sad + 6); updateBarsAndAvatar();
+      sfxClick();
+      const a = "بعضهم احترم موقفها، وبعضهم انتقد؛ التجربة تركت أثرًا مختلطًا.";
+      narrate(a); storyEl.textContent = a;
+      setTimeout(()=>finalSummary(),700);
+    }}
+  ]);
+}
+
+function finalSummary(){
+  let title, msg, encourage;
+  if(happy - sad > 15){ title = 'نهاية مشرقة'; msg = 'لين خرجت أقوى وواثقة.'; encourage = 'أحسنتِ لين، استمري بثقتك!'; sfxSuccess(); avatarImg.src = IMG_HAPPY; burstHappy(); }
+  else if(sad - happy > 10){ title = 'نهاية حزينة'; msg = 'لين شعرت بالألم لكنها بدأت تطلب المساعدة.'; encourage = 'ليس عيبا أن تطلبي الدعم، هذا دليل قوة.'; sfxSad(); moodSadOverlay(); avatarImg.src = IMG_SAD; }
+  else { title = 'نهاية متوازنة'; msg = 'لين تعلمت شيئًا وخطت خطوة للأمام.'; encourage = 'كل تجربة تعلمك، تابعي وتقدمي.'; sfxClick(); avatarImg.src = IMG_NORMAL; }
+  endEl.textContent = title + "\\n\\n" + msg + "\\n\\n" + 'معدل السعادة: ' + happy + '%\\nمعدل الحزن: ' + sad + '%';
+  narrate(encourage);
+  restartBtn.style.display = 'inline-block';
+  restartBtn.onclick = ()=> location.reload();
+  choicesEl.innerHTML = '';
+  try{ if(bg && bg.g){ bg.g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+0.6); } }catch(e){}
+}
+
+/* تحكمات */
+sfxToggle.addEventListener('click', ()=>{ sfxOn = !sfxOn; sfxToggle.textContent = sfxOn ? '🔈 تشغيل الأصوات' : '🔇 كتم الأصوات'; if(sfxOn) ensureAudio(); });
+tipsBtn.addEventListener('click', ()=> alert('نصايح:\\n• تكلمي مع شخص تثقين فيه.\\n• سجّلي المواقف لو تكررت.\\n• التعبير الهادئ قد يكون أقوى من الانتقام.'));
+
+document.addEventListener('click', function unlock(){ try{ ensureAudio(); if(audioCtx && audioCtx.state==='suspended') audioCtx.resume(); startBackground(); }catch(e){} document.removeEventListener('click', unlock); }, {once:true});
+
+/* ابدأ المشهد */
+startScene();
+</script>
+</body>
+</html>
